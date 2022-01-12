@@ -1,5 +1,17 @@
 This is a rebuilt version of [zhanglikernel/CRYPTOREX: Large-scale Analysis of Cryptographic Misuse in IoT Devices (github.com)](https://github.com/zhanglikernel/CRYPTOREX) to make it can be easily used by other researcher
 
+# Read recommendation
+
+- bin2vex
+  - dfs_dir()
+  - decompress()
+  - extractfile()
+  - systemconstruct()
+  - loadso()
+- bin2ir
+  - idarun()
+  - transbin2ir()
+
 # Environment
 
 - linux with **root** previlege, or binwalk won't work
@@ -50,7 +62,11 @@ root@kali:~#
 
 **Angr documentation Node**: Do not attempt to solve any angr problems outside of the virtual environment
 
-## Install buildroot
+## Do not Install buildroot
+
+This paper just use buildroot to install `ldd` under different platform to check the included libs of so file, which is very unnecessary and heavy.
+
+Just replace `ldd` by `readelf` command line tool based on linux system
 
 ## Install IDA pro
 
