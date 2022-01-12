@@ -48,14 +48,16 @@ Exit virtual environment after the execution finished
 root@kali:~#
 ```
 
-**Angr ocumentation Node**: Do not attempt to solve any angr problems outside of the virtual environment
+**Angr documentation Node**: Do not attempt to solve any angr problems outside of the virtual environment
 
 ## Install buildroot
 
 ## Install IDA pro
 
 ```
-链接: https://pan.baidu.com/s/1bdBhVTBYMk0lNIOtCxIjPw 提取码: w28g
+dpkg --add-architecture i386
+apt update
+apt install libfontconfig1:i386 libXrender1:i386 libsm6:i386 libfreetype6:i386 libglib2.0-0:i386
 ```
 
 ## Install python requirement
@@ -88,22 +90,7 @@ excfunction_path = home_path + "/CRYPTOREX/rex/execfunction"
 
 # Usage
 
-这里把命令行改掉了, 不用输入那么多中间命令. 所有文件默认存在当前工作目录的 ./rexProject 目录下
-
-直接使用
-
 ```
-(anrg)root@kali:~# python bin2vex.py -i [要分析的固件] -o [要输出的目录，default =./rexProject] -v [是否保留中间文件，建议选上] 
+python bin2vex.py <firmware_path>(input_dir) <firmware_decompressed_path>(middle_dir) <firmware_IR_PATH>(middle_dir) <detail_report_path>(output_dir) <summary_report_dir>(output_dir)
 ```
 
-一共会输出4个文件，
-
-第一个是解包后的固件包，存在./rexProject/decompress下
-
-第二个是提取后的文件，存在./rexProject/extracted下
-
-第三个是提取的IR文件，存在./rexProject/ir下
-
-若勾选-v, 前三个中间文件在执行结束后将保留，否则执行结束后删除
-
-第四个是report，存在./rexProject/report

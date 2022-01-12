@@ -1,13 +1,12 @@
 import angr
 import pyvex
 import subprocess
-import io
-import string
+# import io
+# import string
 
 import sys
 import os
-import pwd
-import argparse 
+# import pwd
 
 import gzip
 import zipfile
@@ -17,14 +16,12 @@ import rarfile
 import magic
 import binwalk
 import shutil
-
+import argparse
 # import subprocess
 
 from bin2ir3 import idarun
 from bin2ir3 import transbin2IR
-
-from utils import *
-from config import *
+import config
 
 from enum import Enum
 import copy
@@ -59,17 +56,12 @@ class compressmethod(Enum):
 	Edir = -2
 	Eunknown = -1
 
-class archtype(Enum):
-	Elarm = 0
-	Elmips = 1
-	Eunknown = -1
-
 def getcompressmethod(filename):
 	result = compressmethod.Eunknown
 	if os.path.isdir(filename):
 		result = compressmethod.Edir
 		return result
-	filetype = get_filetype(filename)
+	filetype = _get_filetype(filename)
 	if filetype == "application/gzip":
 		result = compressmethod.Egz
 	elif filetype == "application/x-tar":
@@ -81,18 +73,18 @@ def getcompressmethod(filename):
 	return result
 
 
-# def form_filename(filename):
-# 	filename = filename.replace("(","\\(")
-# 	filename = filename.replace(")","\\)")
-# 	return filename
+def filenameformat(filename):
+	filename = filename.replace("(","\\(")
+	filename = filename.replace(")","\\)")
+	return filename
 	
 
-# def get_filetype(data,mime=True):
-# 	return magic.from_file(data,mime)
+def _get_filetype(data,mime=True):
+	return magic.from_file(data,mime)
 
 def un_gz(filename,outputpath):
 	g_file = gzip.GzipFile(filename)
-	dirname = get_prefixname(filename)
+	dirname = path2filename(filename)
 	open(outputpath +"/" + dirname , "w+").write(g_file.read())
 	g_file.close()
 	return outputpath +"/" + dirname
@@ -100,7 +92,7 @@ def un_gz(filename,outputpath):
 def un_tar(filename,outputpath):
 	tar = tarfile.open(filename)
 	names = tar.getnames()
-	dirname = get_prefixname(filename)
+	dirname = path2filename(filename)
 	if os.path.isdir(outputpath+"/" + dirname):
 		pass
 	else:
@@ -114,7 +106,7 @@ def un_tar(filename,outputpath):
 
 def un_zip(file_name,outputpath):
 	zip_file = zipfile.ZipFile(file_name)
-	dirname = get_prefixname(file_name)
+	dirname = path2filename(file_name)
 	if os.path.isdir(outputpath+"/" + dirname):
 		pass
 	else:
@@ -123,7 +115,7 @@ def un_zip(file_name,outputpath):
 		print(names)
 		try:
 			zip_file.extract(names,outputpath+"/" + dirname+ "/")
-		except gzip.BadGzipFile as err:
+		except zipfile.BadZipfile as err:
 			print(err)
 			print(outputpath+"/" + dirname)
 		#finally:
@@ -134,7 +126,7 @@ def un_zip(file_name,outputpath):
 
 def un_rar(filename,outputpath):
 	rar = rarfile.RarFile(filename)
-	dirname = get_prefixname(filename)
+	dirname = path2filename(filename)
 	if os.path.isdir(outputpath + "/" + dirname):
 		pass
 	else:
@@ -180,45 +172,45 @@ def decompress(file_name,outputdir,dc = True):
 	elif filetype == compressmethod.Etgz:
 		pass
 	elif filetype == compressmethod.Eunknown:
-		shutil.copyfile(file_name, outputdir + get_filename(file_name))
+		shutil.copyfile(file_name, outputdir + getfilenamefrompath(file_name))
 		pass
 	return True
 
-# def nmfile(sofile):
-# 	result = set()
-# 	sofile =form_filename(sofile)
-# 	filetype = get_filetype(filename)
-# 	if not filetype == b"application/x-sharedlib":
-# 		return result
-# 	output = os.popen("nm -D " + sofile)
-# 	allline = output.read().split("\n")
-# 	for line in allline:
-# 		field = line.split(" ")
-# 		if not len(field) == 3 or not field[1] == "T":
-# 			continue
-# 		result.add(field[2])
-# 	return result
+def nmfile(sofile):
+	result = set()
+	sofile =filenameformat(sofile)
+	filetype = _get_filetype(sofile)
+	if not filetype == "application/x-sharedlib":
+		return result
+	output = os.popen("nm -D " + sofile)
+	allline = output.read().split("\n")
+	for line in allline:
+		field = line.split(" ")
+		if not len(field) == 3 or not field[1] == "T":
+			continue
+		result.add(field[2])
+	return result
 
 
 def extractfile(filename,outputdir):
-	filetype = get_filetype(filename)
-	if any(s in [filetype] for s in [b"application/x-executable",
-					b"application/x-dosexec",
-					b"application/x-object",
-					b"application/pdf",
-					b"application/msword",
-					b"image/", b"text/", b"video/"]):
+	filetype = _get_filetype(filename)
+	if any(s in [filetype] for s in ["application/x-executable",
+					"application/x-dosexec",
+					"application/x-object",
+					"application/pdf",
+					"application/msword",
+					"image/", "text/", "video/"]):
 		return
-	filetype = get_filetype(filename,mime=False)
-	if any(s in [filetype] for s in [b"executable", b"universal binary",
-					b"relocatable", b"bytecode", b"applet"]):
+	filetype = _get_filetype(filename,mime=False)
+	if any(s in [filetype] for s in ["executable", "universal binary",
+					"relocatable", "bytecode", "applet"]):
 		return
 	print(filename)
 	pwd = os.getcwd()
 	os.chdir(outputdir)
 	global numfirmware
 	numfirmware += 1
-	for module in binwalk.scan(filename,"-e", "-0", "root" ,"-y", "filesystem", signature=True, quiet=True, extract=True):
+	for module in binwalk.scan(filename,"-0","root","-e" ,"-y", "filesystem", signature=True, quiet=True, extract=True):
 		print("%s Results:" % module.name)
 		for result in module.results:
 			if result.file.path in module.extractor.output:
@@ -227,9 +219,18 @@ def extractfile(filename,outputdir):
 	os.chdir(pwd)
 	return True
 
+
+def getfilenamefrompath(path):
+	return path[path.rindex("/") + 1:len(path)]
+
+class archtype(Enum):
+	Elarm = 0
+	Elmips = 1
+	Eunknown = -1
+
 def libformat(libname,filetype):
 	result = ""
-	if not filetype == b"application/x-sharedlib":
+	if not filetype == "application/x-sharedlib":
 		return result
 	lindex = 0
 	if not libname.find("/") == -1:
@@ -242,38 +243,50 @@ def libformat(libname,filetype):
 		result = libname[lindex:len(libname)]
 	return result
 	
+
 def listallso(filename,arch):
+	# soset = set()
+	# commandstr = ""
+	# if arch == archtype.Elmips:
+	# 	commandstr = "$HOME/buildroot/output/host/bin/ldd"
+	# elif arch == archtype.Elarm:
+	# 	commandstr = "$HOME/armbuildroot/output/host/bin/ldd"
+	# else:
+	# 	return soset
+	# filename = filenameformat(filename)
+	# (status,output) = subprocess.getstatusoutput( commandstr + ' ' + filename)
+	# #print(output)
+	# #print(filename)
+	# #print(filename)
+	# outstr = output.splitlines()
+	# for line in outstr:
+	# 	if "=>" in line:
+	# 		soname = line.split("=>")[0]
+	# 		#print(soname)
+	# 		if not soname.find(".so") == -1:
+	# 			soname = soname[:soname.find(".so")].strip()
+	# 		elif not soname.find(".a") == -1:
+	# 			soname = soname[:soname.find(".a")].strip()
+	# 		soset.add(soname)
+	# return soset
 	soset = set()
-	commandstr = ""
-	if arch == archtype.Elmips:
-		commandstr = buildroot_path + "/buildroot/output/host/bin/ldd"
-	elif arch == archtype.Elarm:
-		commandstr = buildroot_path + "/armbuildroot/output/host/bin/ldd"
-	else:
-		return soset
-	filename = form_filename(filename)
-	(status,output) = subprocess.getstatusoutput(commandstr + ' ' + filename)
-	#print(output)
-	#print(filename)
-	#print(filename)
-	outstr = output.splitlines()
-	for line in outstr:
-		if "=>" in line:
-			soname = line.split("=>")[0]
-			#print(soname)
-			if not soname.find(".so") == -1:
-				soname = soname[:soname.find(".so")].strip()
-			elif not soname.find(".a") == -1:
-				soname = soname[:soname.find(".a")].strip()
-			soset.add(soname)
+	filename = filenameformat(filename)
+	# print('list so from: ' + filename)
+	output = subprocess.getoutput('readelf -a ' + filename + ' | grep \"Shared library\"')
+	outlines = output.splitlines()
+	for line in outlines:
+		so = line.split()[-1].replace('[', '').replace(']', '')
+		so = so.split('.')[0]
+		soset.add(so)
+		# print('Shared lib: ' + so)
 	return soset
 	
 def _getarch(filename):
 	result = archtype.Eunknown
 	filetype = ""
-	filename = form_filename(filename)
-	filetype = get_filetype(filename)
-	if not any(s in [filetype] for s in [b"application/x-executable",b"application/x-sharedlib"]):
+	filename = filenameformat(filename)
+	filetype = _get_filetype(filename)
+	if not any(s in [filetype] for s in ["application/x-executable","application/x-sharedlib"]):
 		return result
 	(status,output) = subprocess.getstatusoutput('readelf -h ' + filename)
 	outstr = output.splitlines()
@@ -289,7 +302,7 @@ def _getarch(filename):
 	return result
 
 def isusecrypt(filename,arch):
-	filename = form_filename(filename)
+	filename = filenameformat(filename)
 	result = False
 	if arch == archtype.Elarm:
 		(status,output) = subprocess.getstatusoutput('armobjdump.sh ' + filename + " | grep -E -i \"gcry|EVP|CAST|SSL|encry|cry|aes|DES|decry\"")
@@ -305,14 +318,14 @@ def isusecrypt(filename,arch):
 	elif arch == archtype.Elmips:
 		(status,output) = subprocess.getstatusoutput('mipsobjdump.sh ' + filename + " | grep -E -i \"gcry|EVP|CAST|SSL|encry|cry|aes|DES|decry\"")
 		if(len(output) > 0):
-			outstr = output.splitlines()
-			outputline = filename
-			for line in outstr:
-					allfield = line.split()
-					if(len(allfield) == 2): 
-							outputline += " " + allfield[1][0:len(allfield[1])-1]
-			print(outputline)
-			result = True
+                        outstr = output.splitlines()
+                        outputline = filename
+                        for line in outstr:
+                                allfield = line.split()
+                                if(len(allfield) == 2): 
+                                        outputline += " " + allfield[1][0:len(allfield[1])-1]
+                        print(outputline)
+                        result = True
 	else:
 		pass
 	return result
@@ -326,22 +339,22 @@ def filterfile(filename,outputdir):
 	'''for so in soset:
 		
 		if "libgcry" in so or "libcry" in so or "libssl" in so or "libgcry" in so: 
-			shutil.copyfile(filename, outputdir + get_filename(filename))
+			shutil.copyfile(filename, outputdir + getfilenamefrompath(filename))
 			#print(filename)
 			break
 		#print(so)'''
 	#print(filename)
 	if isusecrypt(filename,arch):
-		shutil.copyfile(filename, outputdir + get_filename(filename))
+		shutil.copyfile(filename, outputdir + getfilenamefrompath(filename))
 	return True
 
 
 def translateIR(filename,outputdir,importfc = dict()):
 	'''print(filename)
-	filetype = get_filetype(filename)
-	filename = form_filename(filename)
-	outputdir = form_filename(outputdir)
-	onlyfilename = get_filename(filename)
+	filetype = _get_filetype(filename)
+	filename = filenameformat(filename)
+	outputdir = filenameformat(outputdir)
+	onlyfilename = getfilenamefrompath(filename)
 	#option = 0
 	if onlyfilename == "busybox":
 		return
@@ -361,7 +374,7 @@ def translateIR(filename,outputdir,importfc = dict()):
 	print("python angrir.py " + filename + " " + outputfile  + " > " + outputfile)
 	os.system("python angrir.py " + filename + " " + outputfile  + " > " + outputfile)
 	return'''
-	onlyfilename = get_filename(filename)
+	onlyfilename = getfilenamefrompath(filename)
 	outputfile = outputdir + "/" + onlyfilename
 	return transbin2IR(filename,outputfile,importfc)
 
@@ -370,19 +383,38 @@ def getIRtmp(filename,outputdir):
 	#print(filename)
 	#soset = listallso(filename,arch)
 	#print(soset)
-	filetype = get_filetype(filename)
-	filename = form_filename(filename)
-	outputdir = form_filename(outputdir)
-	onlyfilename = get_filename(filename)
+	filetype = _get_filetype(filename)
+	filename = filenameformat(filename)
+	outputdir = filenameformat(outputdir)
+	onlyfilename = getfilenamefrompath(filename)
 	if onlyfilename == "busybox":
 		return
-	if not any(s in [filetype] for s in [b"application/x-executable",
-						b"application/x-object",b"application/x-sharedlib"]):
+	if not any(s in [filetype] for s in ["application/x-executable",
+						"application/x-object","application/x-sharedlib"]):
 		return
 	outputdir += onlyfilename
 	idarun(filename,outputdir)
 	return True
 	
+
+
+def challown(filename):
+	filename = filenameformat(filename)
+	os.ystem("chown $USER:$USER " + filename)
+
+
+def mkdir(path):
+	if not os.path.exists(path):
+		os.makedirs(path)
+
+def getfileowner(filename):
+	filename = filenameformat(filename)
+	(status,output) = subprocess.getstatusoutput('ls -al ' + filename)
+	print(filename)
+	print(output)
+	result = output.split()[2]
+	return result
+
 ''' keep dir struct'''
 def dfs_dir(path,outputpath,operationf = None,operationd = None):
 	stack = []
@@ -429,8 +461,8 @@ def dfs_dir(path,outputpath,operationf = None,operationd = None):
 			print(tmp)
 	return ret
 
-def get_prefixname(path):
-	fullfilename = get_filename(path)
+def path2filename(path):
+	fullfilename = path[path.rindex("/")+1:len(path)]
 	prefixfilename = fullfilename[0:fullfilename.rindex(".")]
 	return prefixfilename
 
@@ -455,44 +487,43 @@ def usingrand(fullformatname):
 
 #def rootfinddfs(path,dirname,soset,execset):
 def soexecfile(fullname,outputdir):
-	global soset
-	global execset
-	global name2path
-
-	fullname = form_filename(fullname)
-	filetype = get_filetype(fullname)
-	arch = _getarch(fullname)
-
-	# filename = ""
-	# if fullname.find("/") == -1:
-	# 	filename = fullname
-	# else:
-	# 	filename = fullname[fullname.rindex("/")+1:len(fullname)]
-	filename = get_filename(fullname)
-
-	if filetype == b"application/x-executable":
-		allso = listallso(fullname,arch)
-		#print(allso)
-		for allsoitem in allso:
-			if not allsoitem in execset:
-				execset[allsoitem] = set()
-			execset[allsoitem].add(filename)
-		name2path[filename] = fullname
-		if usingrand(fullname) == randtype.Orand:
-			ousingrandset[filename] = fullname
-		#execset[allso] = filename
-	elif filetype == b"application/x-sharedlib":
-		filename = libformat(fullname,filetype)
-		allso = listallso(fullname,arch)
-		for allsoitem in allso:
-			if not allsoitem in soset:
-				soset[allsoitem] = set()
-			soset[allsoitem].add(filename)
-		name2path[filename] = fullname
-		if usingrand(fullname) == randtype.Orand:
-			ousingrandset[filename] = fullname
-		#soset[allso] = filename
-	return True
+    global soset
+    global execset
+    global name2path
+    fullname = filenameformat(fullname)
+    filetype = _get_filetype(fullname)
+    arch = _getarch(fullname)
+    filename = ""
+    if fullname.find("/") == -1:
+        filename = fullname
+    else:
+        filename = fullname[fullname.rindex("/")+1:len(fullname)]
+    #print(filename + ' ' +filetype)
+    if filetype == "application/x-executable":
+        #print(filename + ' ' +filetype)
+        allso = listallso(fullname,arch)
+        #print(allso)
+        for allsoitem in allso:
+            if not allsoitem in execset:
+                execset[allsoitem] = set()
+            execset[allsoitem].add(filename)
+        name2path[filename] = fullname
+        if usingrand(fullname) == randtype.Orand:
+            ousingrandset[filename] = fullname
+        #execset[allso] = filename
+    elif filetype == "application/x-sharedlib":
+        #print(filename + ' ' +filetype)
+        filename = libformat(fullname,filetype)
+        allso = listallso(fullname,arch)
+        for allsoitem in allso:
+            if not allsoitem in soset:
+                soset[allsoitem] = set()
+            soset[allsoitem].add(filename)
+        name2path[filename] = fullname
+        if usingrand(fullname) == randtype.Orand:
+            ousingrandset[filename] = fullname
+        #soset[allso] = filename
+    return True
 
 def wdetail(df,prompt,dinfo=dict()):
 	wfd = open(df,"a")
@@ -522,15 +553,12 @@ def summurycount(dinfo,result):
 		else:
 			allruleresult[str(ditem[1]) + " " + str(ditem[2])] += 1
 
-def systemconstruct(dirfullpath, outputdir):
+def systemconstruct(dirfullpath,outputdir):
 	global soset
 	global execset
 	global cryptlibset
 	global name2path
 	global ousingrandset
-
-	global numextracted
-
 	dirname = ""
 	result = True
 	currentset = cryptlibset
@@ -540,15 +568,11 @@ def systemconstruct(dirfullpath, outputdir):
 	alldepend=dict()
 	summtable=dict()
 	writefirst = True
-
-	# if dirfullpath.find("/") == -1:
-	# 	dirname = dirfullpath
-	# else:
-	# 	dirname = dirfullpath[dirfullpath.rindex("/") + 1:len(dirfullpath)]
-	# print(dirname)
-	dirname = get_filename(dirfullpath)
+	if dirfullpath.find("/") == -1:
+		dirname = dirfullpath
+	else:
+		dirname = dirfullpath[dirfullpath.rindex("/") + 1:len(dirfullpath)]
 	print(dirname)
-
 	if dirname.endswith("extracted"):
 		testbegintime = time.time()
 		transtimesum = 0
@@ -558,25 +582,21 @@ def systemconstruct(dirfullpath, outputdir):
 			filloutputdir = outputdir + "/" + dirfullpath[dirfullpath.rindex("/") + 1:]
 		else:
 			filloutputdir = outputdir
-
 		detailreportfile = filloutputdir + ".dreport"
 		summuaryreportfile = filloutputdir + ".summary"
-		
+		global numextracted
 		numextracted += 1
 		result = False
-
 		soset.clear()
 		execset.clear()
 		name2path.clear()
 		ousingrandset.clear()
-		
 		dfs_dir(dirfullpath,outputdir+"/"+dirname,operationf=soexecfile,operationd=None)
 		#libmap
 		for currentitem in currentset:
 			if currentitem in soset:
 				loadsoset = soset[currentitem]
 				currentnextset = currentnextset.union(loadsoset)
-
 		while len(currentnextset) > 0:
 			currentset = copy.copy(currentnextset)
 			currentnextset.clear()
@@ -586,7 +606,7 @@ def systemconstruct(dirfullpath, outputdir):
 				print(currentitem)
 				if currentitem in allfset or currentitem == "cupsd" or currentitem == "libtorrent-rasterbar" or currentitem == "smbd" or currentitem == "libperl" or currentitem == "libphp5" or currentitem == "libapr-1":# or currentitem == "tdbbackup" or currentitem == "net" or currentitem == "libbigballofmud" or  currentitem == "smbpasswd" or currentitem == "libsysctxlua" or currentitem == "libzebra" or currentitem == "libcurl" or currentitem == "ssl" or currentitem == "zebra" or currentitem == "stunnel" or currentitem == "libntpass":
 					continue
-				onlyfilename = get_filename(name2path[currentitem])
+				onlyfilename = getfilenamefrompath(name2path[currentitem])
 				if os.path.getsize(name2path[currentitem]) / float(1024*1024) > 10:
 					continue
 				a = time.time()
@@ -633,7 +653,7 @@ def systemconstruct(dirfullpath, outputdir):
 			getIRtmp(name2path[execitem],filloutputdir+"/")
 			b = time.time()
 			print("getIRtmp:%f"%(b-a))
-			onlyfilename = get_filename(name2path[execitem])
+			onlyfilename = getfilenamefrompath(name2path[execitem])
 			testbegintime2 = time.time()
 			(exporteddic,detailreport) = translateIR(filloutputdir + "/" + onlyfilename + "idcom",filloutputdir,importedso)
 			testendtime2 = time.time()
@@ -662,76 +682,38 @@ def systemconstruct(dirfullpath, outputdir):
 	
 
 if __name__ == "__main__":
+	if not len(sys.argv) == 6:
+		print("Usage:<inputpath> <tmppath> <outputpath> <IRtmppath> <IRpath> (absolution path only)");
+		sys.exit(-1);
+	inputpath = sys.argv[1];
+	tmppath = sys.argv[2];
+	outputpath = sys.argv[3];
+	irpath = sys.argv[4];
+	allreportpath = sys.argv[5];
+	globalpath = allreportpath;
+	numextracted = 0;
+	#os.system("rm -rf  " + tmppath);
+	#os.system("rm -rf  " + outputpath);
+	os.system("rm -rf  " + irpath);
+	a = time.time();
+	testr = dfs_dir(inputpath,tmppath,operationf=decompress,operationd = None);
+	testr = dfs_dir(tmppath,outputpath,operationf=extractfile,operationd = None);
+	b = time.time();
+	print("unpack time:%f"%(b-a));
+	testr = dfs_dir(outputpath,irpath,operationf = None, operationd = systemconstruct);
+	wfsummury(allreportpath,"allsummary",allruleresult);
+	print("decompressfile:%d"%numdecompress);
+	dmsg = "decompressfile:%d"%numdecompress;
+	print("numfirmware:%d"%numfirmware);
+	numfirmwaremsg = "numfirmware:%d"%numfirmware;
+	print("extracted:%d"%numextracted);
+	extractednum = "extracted:%d"%numextracted;
+	#wfsummury(allreportpath,numfirmwaremsg);
+	#wfsummury(allreportpath,extractednum);
 	
-
-	cwd = os.getcwd()
-	# project_path = cwd + '/rexProject'
-	project_path = output_path
-
-	parser = argparse.ArgumentParser(description="CryptoREX")
-
-	parser.add_argument('-i', '--input', type = str, required=True, help = 'The firmware to be analyzed')
-	parser.add_argument('-o', '--output', type = str, default=project_path, help = 'The PATH output the report')
-	parser.add_argument('-v', '--verbose', action='store_true', help = 'Store the middle file')
-
-	args = parser.parse_args()
-	# if not len(sys.argv) == 6:
-		# print("Usage:<inputpath> <tmppath> <outputpath> <IRtmppath> <IRpath> (absolution path only)")
-		# sys.exit(-1)
-	
-	
-	input_path = args.input
-
-	decompress_path = project_path + "/decompress"
-	extract_path = project_path + "/extract"
-	ir_path = project_path + "/ir"
-	report_path = project_path + "/report"
-
-
-	# tmp_path = cwd + sys.argv[2]
-	# output_path = cwd + sys.argv[3]
-	# ir_path = cwd + sys.argv[4]
-	# allreport_path = cwd + sys.argv[5]
-	# global_path = cwd + allreport_path
-	# numextracted = 0
-	# numdecompress = 0
-	#os.system("rm -rf  " + tmppath)
-	#os.system("rm -rf  " + outputpath)
-	#os.system("rm -rf  " + irpath)
-	# a = time.time()
-	# testr = dfs_dir(inputpath,tmppath,operationf=decompress,operationd = None)
-	# testr = dfs_dir(tmppath,outputpath,operationf=extractfile,operationd = None)
-	# b = time.time()
-	# print("unpacking time:%f"%(b-a))
-	# testr = dfs_dir(outputpath,irpath,operationf = None, operationd = systemconstruct)
-	# wfsummury(allreportpath,"allsummary",allruleresult)
-
-	a = time.time()
-	testr = dfs_dir(input_path, decompress_path,operationf=decompress,operationd = None)
-	testr = dfs_dir(decompress_path, extract_path,operationf=extractfile,operationd = None)
-	b = time.time()
-	print("unpacking time:%f"%(b-a))
-	testr = dfs_dir(extract_path,ir_path,operationf = None, operationd = systemconstruct)
-	
-	if not args.verbose:
-		os.system("rm -rf  " + decompress_path)
-		os.system("rm -rf  " + extract_path)
-		os.system("rm -rf  " + ir_path)	
-
-	wfsummury(report_path,"allsummary",allruleresult)
-	
-	print("decompressfile:%d"%numdecompress)
-	dmsg = "decompressfile:%d"%numdecompress
-	print("numfirmware:%d"%numfirmware)
-	numfirmwaremsg = "numfirmware:%d"%numfirmware
-	print("extracted:%d"%numextracted)
-	extractednum = "extracted:%d"%numextracted
-	#wfsummury(allreportpath,numfirmwaremsg)
-	#wfsummury(allreportpath,extractednum)
-	
-	# testr = dfs_dir(outputpath,irpath,operationf=filterfile)
-	# testr = dfs_dir(outputpath,irpath)
-	# print("ir%s\n"%(irpath))
-	# testr = dfs_dir(outputpath,sirtmppath,operationf=getIRtmp)
-	# testr = dfs_dir(irtmppath,irpath,operationf=translateIR)
-	# wfsummury(allreportpath,allruleresult)
+	#'''testr = dfs_dir(outputpath,irpath,operationf=filterfile)
+	#testr = dfs_dir(outputpath,irpath)
+	#print("ir%s\n"%(irpath))
+	#testr = dfs_dir(outputpath,irtmppath,operationf=getIRtmp)
+	#testr = dfs_dir(irtmppath,irpath,operationf=translateIR)
+	#wfsummury(allreportpath,allruleresult)'''

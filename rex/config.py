@@ -1,9 +1,7 @@
-home_path = "$HOME/Downloads"
-buildroot_path = ""
-output_path = home_path + "/CRYPTOREX/rex/rexProject"
-ida_path = home_path + "/IDA_Pro_v6.4_Linux"
-script_path = home_path + "/CRYPTOREX/idascript/bin2iridc.idc"
-misuseprofile_path = home_path + "/CRYPTOREX/rex/misuseprofile"
-excfunction_path = home_path + "/CRYPTOREX/rex/execfunction"
+home_path = "/root/Documents/CRYPTOREX"
+output_path = home_path + "/rex/output"
+ida_path = "/root/Downloads/IDA_Pro_v6.4"
+script_path = home_path + "/idascript/bin2iridc.idc"
+misuseprofile_path = home_path + "/rex/misuseprofile"
+execfunction_path = home_path + "/rex/execfunction"
 
-cryptlibset = {"libcrypto", "libcrypt", "libssl", "libgcrypt", "libwolfssl", "libmcrypt"}
